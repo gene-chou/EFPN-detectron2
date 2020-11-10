@@ -1,8 +1,14 @@
 ## EFPN implementation based on detectron2
 
-"detectron2" folder name changed to "detectron" to correctly build
+"detectron2" folder name changed to "detectron" to correctly build (could also work outside of root dir)
+
 add training script 
+
 add "efpn.py" in detectron/modeling/backbone
+
+get C2' from backbone to produce P2', connect new head to P2'\
+
+loss function that balances foreground-background
 
 
 Credits:
