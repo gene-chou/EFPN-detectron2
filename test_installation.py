@@ -8,9 +8,9 @@ import os
 import time
 import cv2
 
-from detectron.config import get_cfg # returns a copy of the default config
-from detectron.engine import DefaultTrainer
-from detectron.model_zoo import model_zoo
+from detectron2.config import get_cfg # returns a copy of the default config
+from detectron2.engine import DefaultTrainer
+from detectron2.model_zoo import model_zoo
 
 
 cfg = get_cfg()
