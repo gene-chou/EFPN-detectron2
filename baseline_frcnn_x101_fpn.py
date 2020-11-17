@@ -23,7 +23,7 @@ cfg.MODEL.RESNETS.WIDTH_PER_GROUP = 8
 cfg.MODEL.RESNETS.DEPTH = 101
 cfg.MODEL.BACKBONE.FREEZE_AT = 0
 cfg.MODEL.BACKBONE.NAME = "build_resnet_fpn_backbone"
-cfg.MODEL.DEVICE = 'cpu' 
+cfg.MODEL.DEVICE = 'cuda' 
 
 #dataset default is coco 
 #cfg.DATASETS.TRAIN = ("",)
