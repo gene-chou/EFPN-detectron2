@@ -10,6 +10,8 @@ from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 
+from ftt import FTT
+
 __all__ = ["build_resnet_fpn_backbone", 
             #"build_retinanet_resnet_fpn_backbone", 
             "FPN"]
@@ -101,6 +103,7 @@ class FPN(Backbone):
 
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
+        self.ftt = FTT(self, ['p2', 'p3'], out_channels)
         self._size_divisibility = strides[-1]
         assert fuse_type in {"avg", "sum"}
         self._fuse_type = fuse_type
@@ -144,7 +147,9 @@ class FPN(Backbone):
                 top_block_in_feature = results[self._out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
-        return dict(zip(self._out_features, results))
+        ret = dict(zip(self._out_features, results))
+        ret['p3\''] = self.ftt.forward(ret)
+        return ret
 
     def output_shape(self):
         return {
