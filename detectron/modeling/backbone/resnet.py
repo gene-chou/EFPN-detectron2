@@ -292,10 +292,9 @@ class ResNet(Backbone):
             self._out_feature_strides[name] = current_stride = int(
                 current_stride * np.prod([k.stride for k in blocks])
             )
-            # print(self._out_feature_channels)
-            # print(name)
-            # print(blocks[-1].out_channels)
+
             self._out_feature_channels[name] = curr_channels = blocks[-1].out_channels
+        
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -310,6 +309,7 @@ class ResNet(Backbone):
         if out_features is None:
             out_features = [name]
         self._out_features = out_features
+
         assert len(self._out_features)
         children = [x[0] for x in self.named_children()]
         for out_feature in self._out_features:
@@ -534,5 +534,4 @@ def build_resnet_backbone(cfg, input_shape):
 
         stages.append(blocks)
 
-
-    return ResNet(stem, stages, out_features=out_features).freeze(freeze_at)
+    return ResNet(stem, stages, out_features=['res2', 'res3', 'res4', 'res5', 'res6']).freeze(freeze_at)
