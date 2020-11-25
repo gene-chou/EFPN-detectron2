@@ -214,7 +214,7 @@ class SingleDownsampling(CNNBlockBase):
     def forward(self, x):
         out = self.conv1(x)
         #out = F.relu_(out)
-        out += x
+        #out += x
         out = F.relu_(out)
         return out
 
