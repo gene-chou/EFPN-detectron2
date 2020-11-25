@@ -348,7 +348,7 @@ class ResNet(Backbone):
             for name in self._out_features
         }
 
-    def freeze(self, freeze_at=0):
+    def freeze(self, freeze_at=1):
         """
         Freeze the first several stages of the ResNet. Commonly used in
         fine-tuning.
@@ -531,6 +531,7 @@ def build_resnet_backbone(cfg, input_shape):
             stage_kargs["block_class"] = SingleDownsampling
             stage_kargs["num_blocks"] = 1
             blocks = ResNet.make_stage(**stage_kargs)
+            in_channels *=2
 
         stages.append(blocks)
 
