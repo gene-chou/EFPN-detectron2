@@ -68,6 +68,7 @@ class BottleneckBlock(CNNBlockBase):
             dilation (int): the dilation rate of the 3x3 conv layer.
         """
         super().__init__(in_channels, out_channels, stride)
+        #print("\n\n CONFIRMING THAT NEW RESNET IS PRINTED\n\n")
 
         if in_channels != out_channels:
             self.shortcut = Conv2d(
@@ -149,6 +150,74 @@ class BottleneckBlock(CNNBlockBase):
         out = F.relu_(out)
         return out
 
+class SingleDownsampling(CNNBlockBase):
+    """
+    For c2 downsampling only 
+    """
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        *,
+        bottleneck_channels,
+        stride=1,
+        num_groups=1,
+        norm="BN",
+        stride_in_1x1=False,
+        dilation=1,
+    ):
+        """
+        Args:
+            bottleneck_channels (int): number of output channels for the 3x3
+                "bottleneck" conv layers.
+            num_groups (int): number of groups for the 3x3 conv layer.
+            norm (str or callable): normalization for all conv layers.
+                See :func:`layers.get_norm` for supported format.
+            stride_in_1x1 (bool): when stride>1, whether to put stride in the
+                first 1x1 convolution or the bottleneck 3x3 convolution.
+            dilation (int): the dilation rate of the 3x3 conv layer.
+        """
+        super().__init__(in_channels, out_channels, stride)
+        
+        self.shortcut = None
+
+        # The original MSRA ResNet models have stride in the first 1x1 conv
+        # The subsequent fb.torch.resnet and Caffe2 ResNe[X]t implementations have
+        # stride in the 3x3 conv
+        stride_1x1, stride_3x3 = (stride, 1) if stride_in_1x1 else (1, stride)
+
+        self.conv1 = Conv2d(
+            in_channels,
+            bottleneck_channels,
+            kernel_size=1,
+            stride=(2,2),
+            padding=1,
+            bias=False,
+            norm=get_norm(norm, bottleneck_channels),
+        )
+
+        weight_init.c2_msra_fill(self.conv1)
+
+        # Zero-initialize the last normalization in each residual branch,
+        # so that at the beginning, the residual branch starts with zeros,
+        # and each residual block behaves like an identity.
+        # See Sec 5.1 in "Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour":
+        # "For BN layers, the learnable scaling coefficient γ is initialized
+        # to be 1, except for each residual block's last BN
+        # where γ is initialized to be 0."
+
+        # nn.init.constant_(self.conv3.norm.weight, 0)
+        # TODO this somehow hurts performance when training GN models from scratch.
+        # Add it as an option when we need to use this code to train a backbone.
+
+    def forward(self, x):
+        out = self.conv1(x)
+        #out = F.relu_(out)
+        #out += x
+        out = F.relu_(out)
+        return out
+
 
 class BasicStem(CNNBlockBase):
     """
@@ -199,6 +268,8 @@ class ResNet(Backbone):
                 If None, will return the output of the last layer.
         """
         super().__init__()
+        #print("arg stages: ")
+        #print(stages)
         self.stem = stem
         self.num_classes = num_classes
 
@@ -221,7 +292,9 @@ class ResNet(Backbone):
             self._out_feature_strides[name] = current_stride = int(
                 current_stride * np.prod([k.stride for k in blocks])
             )
+
             self._out_feature_channels[name] = curr_channels = blocks[-1].out_channels
+        
 
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -236,6 +309,7 @@ class ResNet(Backbone):
         if out_features is None:
             out_features = [name]
         self._out_features = out_features
+
         assert len(self._out_features)
         children = [x[0] for x in self.named_children()]
         for out_feature in self._out_features:
@@ -274,7 +348,7 @@ class ResNet(Backbone):
             for name in self._out_features
         }
 
-    def freeze(self, freeze_at=0):
+    def freeze(self, freeze_at=1):
         """
         Freeze the first several stages of the ResNet. Commonly used in
         fine-tuning.
@@ -413,22 +487,23 @@ def build_resnet_backbone(cfg, input_shape):
     assert res5_dilation in {1, 2}, "res5_dilation cannot be {}.".format(res5_dilation)
 
     num_blocks_per_stage = {
-        50: [3, 0, 4, 6, 3],
-        101: [3, 0, 4, 23, 3], #added a C2' in front of C2; C2 has no blocks bc it is simply the downsampled C2'
+        50: [3, 1, 4, 6, 3],
+        101: [3, 1, 4, 23, 3], #added a C2' in front of C2; C2 has no blocks bc it is simply the downsampled C2'
     }[depth]
 
     stages = []
 
     # Avoid creating variables without gradients
     # It consumes extra memory and may cause allreduce to fail
-    out_stage_idx = [
-        #{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in out_features if f != "stem"
-        #{"res2_p": 2, "res2": 3, "res3": 4, "res4": 5, "res5": 6}[f] for f in out_features if f != "stem"
-        {"res2": 2, "res3": 3, "res4": 4, "res5": 5, "res6": 6}[f] for f in out_features if f != "stem"
-    ]
-    # print(out_stage_idx): [5] <-- default config out_features is ['res4']
-    max_stage_idx = max(out_stage_idx)
-    for idx, stage_idx in enumerate(range(2, max_stage_idx + 1)):
+    # default config: MODEL.RESNETS.OUT_FEATURES = ["res4"]
+    # out_stage_idx = [
+    #     #{"res2": 2, "res3": 3, "res4": 4, "res5": 5}[f] for f in out_features if f != "stem"
+    #     #{"res2_p": 2, "res2": 3, "res3": 4, "res4": 5, "res5": 6}[f] for f in out_features if f != "stem"
+    #     {"res2": 2, "res3": 3, "res4": 4, "res5": 5, "res6": 6}[f] for f in out_features if f != "stem"
+    # ]
+
+    # max_stage_idx = max(out_stage_idx)
+    for idx, stage_idx in enumerate(range(2, 7)): #max_stage_idx + 1)):
         dilation = res5_dilation if stage_idx == 6 else 1 
         first_stride = 1 if idx == 0 or (stage_idx == 6 and dilation == 2) else 2
         stage_kargs = {
@@ -445,13 +520,18 @@ def build_resnet_backbone(cfg, input_shape):
         stage_kargs["num_groups"] = num_groups
         stage_kargs["block_class"] = BottleneckBlock
 
-        blocks = ResNet.make_stage(**stage_kargs)
         
         #in_channels and out_channels for C2' and C2 is the same, only difference is former does not have pooling 
-        if(idx!=0):
+        if(idx!=1):
+            blocks = ResNet.make_stage(**stage_kargs)
             in_channels = out_channels
             out_channels *= 2
             bottleneck_channels *= 2
+        else:
+            stage_kargs["block_class"] = SingleDownsampling
+            stage_kargs["num_blocks"] = 1
+            blocks = ResNet.make_stage(**stage_kargs)
 
         stages.append(blocks)
-    return ResNet(stem, stages, out_features=out_features).freeze(freeze_at)
+
+    return ResNet(stem, stages, out_features=['res2', 'res3', 'res4', 'res5', 'res6']).freeze(freeze_at)

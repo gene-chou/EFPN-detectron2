@@ -10,7 +10,7 @@ from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 
-from ftt import FTT
+from .ftt import FTT
 
 __all__ = ["build_resnet_fpn_backbone", 
             #"build_retinanet_resnet_fpn_backbone", 
