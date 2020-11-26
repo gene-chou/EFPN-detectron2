@@ -189,13 +189,15 @@ class SingleDownsampling(CNNBlockBase):
 
         self.conv1 = Conv2d(
             in_channels,
-            bottleneck_channels,
-            kernel_size=1,
+            out_channels, # bottleneck_channels, no diff
+            kernel_size=3,
             stride=(2,2),
             padding=1,
             bias=False,
-            norm=get_norm(norm, bottleneck_channels),
+            norm=get_norm(norm, out_channels), # bottleneck_channels
         )
+
+        print("out_channels: ", out_channels, "\nbottleneck_channels: ", bottleneck_channels)
 
         weight_init.c2_msra_fill(self.conv1)
 
@@ -531,6 +533,9 @@ def build_resnet_backbone(cfg, input_shape):
             stage_kargs["block_class"] = SingleDownsampling
             stage_kargs["num_blocks"] = 1
             blocks = ResNet.make_stage(**stage_kargs)
+            in_channels *=2
+            # bottleneck_channels *= 2
+            # out_channels *= 2
 
         stages.append(blocks)
 

@@ -53,6 +53,11 @@ class FPN(Backbone):
         assert isinstance(bottom_up, Backbone)
         assert in_features, in_features
 
+        print("in_features: \n\n", in_features, '\n\n')
+        # in_features['res4'].channels //= 2
+        # in_features['res5'].channels //= 2
+        
+
         # Feature map strides and channels from the bottom up network (e.g. ResNet)
         input_shapes = bottom_up.output_shape()
         strides = [input_shapes[f].stride for f in in_features]
@@ -63,13 +68,21 @@ class FPN(Backbone):
         output_convs = []
 
         use_bias = norm == ""
+        print("\n\n in channels per feature: ", in_channels_per_feature, '\n\n')
         for idx, in_channels in enumerate(in_channels_per_feature):
+
+            # doesn't fix checkpoint dimension problem :(
+            # if idx > len(in_channels_per_feature) - 3:
+            #     in_channels //= 2
+
             lateral_norm = get_norm(norm, out_channels)
             output_norm = get_norm(norm, out_channels)
 
             lateral_conv = Conv2d(
                 in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
             )
+            print('\n in_channels: ', idx, in_channels)
+            print('\n out_channels: ', out_channels)
             output_conv = Conv2d(
                 out_channels,
                 out_channels,
@@ -92,14 +105,22 @@ class FPN(Backbone):
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
         self.top_block = top_block
+       
+        
         self.in_features = in_features
+
+        print('\n\n', in_features, '\n\n')
+
+
+
         self.bottom_up = bottom_up
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in strides}
         # top block output feature maps.
         if self.top_block is not None:
+            # print(range(stage, stage + self.top_block.num_levels))
             for s in range(stage, stage + self.top_block.num_levels):
-                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1) 
 
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
@@ -148,7 +169,9 @@ class FPN(Backbone):
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
         ret = dict(zip(self._out_features, results))
+        print(ret, '\n', '-----------', '\n\n')
         ret['p3\''] = self.ftt.forward(ret)
+        print(ret)
         return ret
 
     def output_shape(self):
@@ -179,7 +202,7 @@ class LastLevelMaxPool(nn.Module):
     def __init__(self):
         super().__init__()
         self.num_levels = 1
-        self.in_feature = "p5"
+        self.in_feature = "p6" # originally p5
 
     def forward(self, x):
         return [F.max_pool2d(x, kernel_size=1, stride=2, padding=0)]
