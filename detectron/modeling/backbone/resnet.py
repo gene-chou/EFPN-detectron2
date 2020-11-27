@@ -190,7 +190,7 @@ class SingleDownsampling(CNNBlockBase):
         self.conv1 = Conv2d(
             in_channels,
             bottleneck_channels,
-            kernel_size=3,
+            kernel_size=1,
             stride=(2,2),
             padding=1,
             bias=False,

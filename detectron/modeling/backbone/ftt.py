@@ -1,4 +1,14 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+import logging
+import numpy as np
+import fvcore.nn.weight_init as weight_init
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from detectron2.layers import Conv2d, ShapeSpec, get_norm
+
+
+
 import math
 import fvcore.nn.weight_init as weight_init
 import torch.nn.functional as F
@@ -10,11 +20,12 @@ from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 
-from .ftt import FTT
 
-__all__ = ["build_resnet_fpn_backbone", 
-            #"build_retinanet_resnet_fpn_backbone", 
-            "FPN"]
+# __all__ = ["build_resnet_fpn_backbone", 
+#             #"build_retinanet_resnet_fpn_backbone", 
+#             "FPN"]
+
+
 
 
 class FPN(Backbone):
@@ -64,18 +75,12 @@ class FPN(Backbone):
 
         use_bias = norm == ""
         for idx, in_channels in enumerate(in_channels_per_feature):
-
-            # doesn't fix checkpoint dimension problem :(
-            # if idx > len(in_channels_per_feature) - 3:
-            #     in_channels //= 2
-
             lateral_norm = get_norm(norm, out_channels)
             output_norm = get_norm(norm, out_channels)
 
             lateral_conv = Conv2d(
                 in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
             )
-
             output_conv = Conv2d(
                 out_channels,
                 out_channels,
@@ -98,7 +103,6 @@ class FPN(Backbone):
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
         self.top_block = top_block
-       
         self.in_features = in_features
         self.bottom_up = bottom_up
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
@@ -106,7 +110,7 @@ class FPN(Backbone):
         # top block output feature maps.
         if self.top_block is not None:
             for s in range(stage, stage + self.top_block.num_levels):
-                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1) 
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
 
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
@@ -155,11 +159,7 @@ class FPN(Backbone):
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
         ret = dict(zip(self._out_features, results))
-        print("\nret1: ")
-        print(ret, '\n', '-----------', '\n\n')
         ret['p3\''] = self.ftt.forward(ret)
-        print("\nret2: ")
-        print(ret,'---\n')
         return ret
 
     def output_shape(self):
@@ -190,31 +190,152 @@ class LastLevelMaxPool(nn.Module):
     def __init__(self):
         super().__init__()
         self.num_levels = 1
-        self.in_feature = "p6" # originally p5
+        self.in_feature = "p5"
 
     def forward(self, x):
         return [F.max_pool2d(x, kernel_size=1, stride=2, padding=0)]
 
 
 
-@BACKBONE_REGISTRY.register()
-def build_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
-    """
-    Args:
-        cfg: a detectron2 CfgNode
+# @BACKBONE_REGISTRY.register()
+# def build_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
+#     """
+#     Args:
+#         cfg: a detectron2 CfgNode
 
-    Returns:
-        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+#     Returns:
+#         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+#     """
+#     bottom_up = build_resnet_backbone(cfg, input_shape)
+#     in_features = cfg.MODEL.FPN.IN_FEATURES
+#     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+#     backbone = FPN(
+#         bottom_up=bottom_up,
+#         in_features=in_features,
+#         out_channels=out_channels,
+#         norm=cfg.MODEL.FPN.NORM,
+#         top_block=LastLevelMaxPool(),
+#         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+#     )
+#     return backbone
+
+
+
+class FTT():
     """
-    bottom_up = build_resnet_backbone(cfg, input_shape)
-    in_features = cfg.MODEL.FPN.IN_FEATURES
-    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    backbone = FPN(
-        bottom_up=bottom_up,
-        in_features=in_features,
-        out_channels=out_channels,
-        norm=cfg.MODEL.FPN.NORM,
-        top_block=LastLevelMaxPool(),
-        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
-    )
-    return backbone
+        in_features should be p2, p3
+    """
+    def __init__(
+        self, fpn, in_features, out_channels, norm = "BN"
+    ):
+        # assert isinstance(fpn, FPN)
+        assert in_features == ['p2', 'p3']
+        input_shapes = fpn.output_shape()
+        assert input_shapes['p3'].channels == input_shapes['p2'].channels
+        # in_channels_per_feature = [input_shapes[f].channels for f in in_features]
+
+        # Apply before content extractor to scale up channels from C to 4C
+        self.channel_scaler = Conv2d(
+            input_shapes['p3'].channels,
+            input_shapes['p2'].channels * 4,
+            kernel_size=1,
+            bias=False,
+            norm=''
+        )
+        self.content_extractor = Extractor(input_shapes['p2'].channels * 4, 3, norm)
+        self.texture_extractor = Extractor(input_shapes['p2'].channels * 2, 3, norm)
+        self.sub_pixel_conv = SubPixelConv(input_shapes['p2'].channels * 4, 2)
+
+    # x should be a dict mapping from p2 and p3 to their corresponding inputs
+    # inputs should have (N, C, H, W) dimensions
+    # Returns N p3' tensors
+    def forward(self, x):
+        assert x['p2'] is not None
+        assert x['p3'] is not None
+        assert len(x['p2'].shape) == 4
+        assert len(x['p3'].shape) == 4
+
+        result = []
+        for i in range(x['p3'].shape[0]):
+            bottom = x['p3'][i]
+            bottom = self.channel_scaler(bottom)
+            bottom = self.content_extractor.forward(bottom)
+            bottom = self.sub_pixel_conv.forward(bottom)
+
+            # We interpreted "wrap" as concatenating bottom and top
+            # so the total channels is doubled after (basically place one on top
+            # of the other)
+            top = x['p2'][i]
+            top = np.concatenate((bottom, top), axis=0)
+            top = self.texture_extractor.forward(top)
+
+            # Since top has double the original # of channels, we "cast" bottom
+            # to the same shape, then add to get p3'
+            bottom = np.concatenate((bottom, bottom), axis=0)
+            result.append(bottom + top)
+
+        return result
+
+# Content and Texture Extractor
+class Extractor():
+    # in and out channels are the same, so for context extractor we'll conv2D
+    # before to up it from C to 4C channels
+    def __init__(self, num_channels, iterations, norm):
+        self.iterations = iterations
+        self.conv1 = Conv2d(
+            num_channels,
+            num_channels,
+            kernel_size=1,
+            bias=False,
+            norm=get_norm(norm, num_channels),
+        )
+        self.conv2 = Conv2d(
+            num_channels,
+            num_channels,
+            kernel_size=1,
+            bias=False,
+            norm=get_norm(norm, num_channels),
+        )
+    
+    def _forward_one(self, x):
+        out = self.conv1(x)
+        out = F.relu_(out)
+        out = self.conv2(out)
+        return out
+
+    def forward(self, x):
+        out = x
+        for i in range(self.iterations):
+            out = self._forward_one(out)
+        return out
+
+class SubPixelConv():
+    # in_channels = out_channels * r ^ 2
+    def __init__(self, in_channels, r):
+        assert in_channels % (r*r) == 0
+        self.in_channels = in_channels
+        self.out_channels = int(in_channels / (r*r))
+        assert self.out_channels * r * r == self.in_channels
+        self.r = r
+    
+    # x.shape should be (in_channels, H, W)
+    # output shape is (in_channels / r^2, rH, rW)
+    def forward(self, x):
+        C, H, W = x.shape
+        r = self.r
+        assert C == self.in_channels
+        output = np.zeros(self.out_channels, r*H, r*W)
+
+        for c in range(self.out_channels):
+            for i in range(H):
+                for j in range(W):
+                    values = x[c*r*r:(c+1)*r*r][i][j]
+                    output[c][i:i + r][j:j + r] = np.reshape(values, (r,r))
+        return output
+
+
+
+
+
+
+
