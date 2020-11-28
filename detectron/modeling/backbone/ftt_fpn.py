@@ -10,7 +10,10 @@ from .backbone import Backbone
 from .build import BACKBONE_REGISTRY
 from .resnet import build_resnet_backbone
 
+from .ftt import FTT
+
 __all__ = ["build_resnet_fpn_backbone", 
+            #"build_retinanet_resnet_fpn_backbone", 
             "FPN"]
 
 
@@ -46,23 +49,14 @@ class FPN(Backbone):
                 ones. It can be "sum" (default), which sums up element-wise; or "avg",
                 which takes the element-wise mean of the two.
         """
-        #print("\n\n CONFIRMING THAT NEW FPN IS PRINTED\n\n")
         super(FPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
         assert in_features, in_features
 
-        #print(in_features) #['res2', 'res3', 'res4', 'res5', 'res6']
-        #print(out_channels) #256
-        #print(top_block) -> LastLevelMaxPool()
-        #print(fuse_type) -> sum
-
         # Feature map strides and channels from the bottom up network (e.g. ResNet)
         input_shapes = bottom_up.output_shape()
-        #print(input_shapes)
-        # {'res2': ShapeSpec(channels=256, height=None, width=None, stride=4), 'res3': ShapeSpec(channels=512, height=None, width=None, stride=8), 'res4': ShapeSpec(channels=512, height=None, width=None, stride=16), 'res5': ShapeSpec(channels=1024, height=None, width=None, stride=32), 'res6': ShapeSpec(channels=2048, height=None, width=None, stride=64)}
         strides = [input_shapes[f].stride for f in in_features]
         in_channels_per_feature = [input_shapes[f].channels for f in in_features]
-        #print(in_channels_per_feature) -> [256, 512, 512, 1024, 2048]
 
         _assert_strides_are_log2_contiguous(strides)
         lateral_convs = []
@@ -70,12 +64,18 @@ class FPN(Backbone):
 
         use_bias = norm == ""
         for idx, in_channels in enumerate(in_channels_per_feature):
+
+            # doesn't fix checkpoint dimension problem :(
+            # if idx > len(in_channels_per_feature) - 3:
+            #     in_channels //= 2
+
             lateral_norm = get_norm(norm, out_channels)
             output_norm = get_norm(norm, out_channels)
 
             lateral_conv = Conv2d(
                 in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
             )
+
             output_conv = Conv2d(
                 out_channels,
                 out_channels,
@@ -90,32 +90,27 @@ class FPN(Backbone):
             stage = int(math.log2(strides[idx]))
             self.add_module("fpn_lateral{}".format(stage), lateral_conv)
             self.add_module("fpn_output{}".format(stage), output_conv)
+
             lateral_convs.append(lateral_conv)
             output_convs.append(output_conv)
-        #print(lateral_convs) #-> [Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1)), Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1)), Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1)), Conv2d(1024, 256, kernel_size=(1, 1), stride=(1, 1)), Conv2d(2048, 256, kernel_size=(1, 1), stride=(1, 1))]
-        #print(output_convs) #-> [Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)), Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))]
-        
         # Place convs into top-down order (from low to high resolution)
         # to make the top-down computation in forward clearer.
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
         self.top_block = top_block
+       
         self.in_features = in_features
         self.bottom_up = bottom_up
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in strides}
-        #print(self._out_feature_strides) -> {'p2': 4, 'p3': 8, 'p4': 16, 'p5': 32, 'p6': 64}
-        
         # top block output feature maps.
         if self.top_block is not None:
             for s in range(stage, stage + self.top_block.num_levels):
-                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
-
-        #print(self._out_feature_strides)# -> {'p2': 4, 'p3': 8, 'p4': 16, 'p5': 32, 'p6': 64, 'p7': 128}
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1) 
 
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: out_channels for k in self._out_features}
-        #print(self._out_feature_channels) -> {'p2': 256, 'p3': 256, 'p4': 256, 'p5': 256, 'p6': 256, 'p7': 256}
+        self.ftt = FTT(self, ['p2', 'p3'], out_channels)
         self._size_divisibility = strides[-1]
         assert fuse_type in {"avg", "sum"}
         self._fuse_type = fuse_type
@@ -138,12 +133,6 @@ class FPN(Backbone):
                 ["p2", "p3", ..., "p6"].
         """
         # Reverse feature maps into top-down order (from low to high resolution)
-        
-        # x.shape = torch.Size([2, 3, 832, 1216]), where 2 is the batch size
-        # x[0] = [3, 832, 1216] -> the image
-
-        #print("\nshape of feature map: ",x.shape,"\n\n")
-
         bottom_up_features = self.bottom_up(x)
         x = [bottom_up_features[f] for f in self.in_features[::-1]]
         results = []
@@ -154,9 +143,6 @@ class FPN(Backbone):
         ):
             top_down_features = F.interpolate(prev_features, scale_factor=2, mode="nearest")
             lateral_features = lateral_conv(features)
-            # print("\nlateral conv: ",type(lateral_conv),"\n",lateral_conv,"\n---\n")
-            # print("\ntop down features: ",type(top_down_features), "\n", top_down_features.shape,"\n----\n")
-            # print("\nlateral features: ",type(lateral_features), "\n", lateral_features.shape,"\n----\n")
             prev_features = lateral_features + top_down_features
             if self._fuse_type == "avg":
                 prev_features /= 2
@@ -168,7 +154,13 @@ class FPN(Backbone):
                 top_block_in_feature = results[self._out_features.index(self.top_block.in_feature)]
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
-        return dict(zip(self._out_features, results))
+        ret = dict(zip(self._out_features, results))
+        print("\nret1: ")
+        print(ret, '\n', '-----------', '\n\n')
+        ret['p3\''] = self.ftt.forward(ret)
+        print("\nret2: ")
+        print(ret,'---\n')
+        return ret
 
     def output_shape(self):
         return {
@@ -198,7 +190,7 @@ class LastLevelMaxPool(nn.Module):
     def __init__(self):
         super().__init__()
         self.num_levels = 1
-        self.in_feature = 'p6' #"p5"
+        self.in_feature = "p6" # originally p5
 
     def forward(self, x):
         return [F.max_pool2d(x, kernel_size=1, stride=2, padding=0)]

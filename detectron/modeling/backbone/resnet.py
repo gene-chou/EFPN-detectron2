@@ -192,7 +192,7 @@ class SingleDownsampling(CNNBlockBase):
             bottleneck_channels,
             kernel_size=1,
             stride=(2,2),
-            padding=1,
+            padding=0,
             bias=False,
             norm=get_norm(norm, bottleneck_channels),
         )
