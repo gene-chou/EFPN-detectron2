@@ -234,8 +234,8 @@ class FPN(Backbone):
         ret = dict(zip(self._out_features, results))
         # ret['p3\''] = self.ftt.forward(ret)
 
-        p3_p = FTT_get_p3pr(ret['p3'], ret['p4'])#, self.channel_scaler, self.content_extractor, self.texture_extractor)
-        ret['p2'] = p3_p       
+        p2_p = FTT_get_p3pr(ret['p3'], ret['p4'], 256, "")#, self.channel_scaler, self.content_extractor, self.texture_extractor)
+        ret['p2'] = p2_p       
 
         return ret
 

@@ -23,7 +23,10 @@ from .resnet import build_resnet_backbone
 
 # p2, p3 in the paper is p3, p4 for us 
 # format of p2, p3 is both [bs, channels, height, width]
-def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor): 
+def FTT_get_p3pr(p2, p3, out_channels, norm):#, channel_scaler, content_extractor, texture_extractor): 
+
+    print("p2: \n",type(p2),"\n",p2.shape,"\n")
+    print("p3: \n",type(p3),"\n",p3.shape,"\n")
 
     # channel_scaler = Conv2d(
     #     p3[1],
@@ -40,8 +43,8 @@ def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor
         out_channels,
         out_channels * 4,
         kernel_size=1,
-        bias=False,
-        norm=''
+        bias=False
+        #norm=''
     )
 
     # tuple of (conv2d, conv2d, iter)
@@ -51,7 +54,7 @@ def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor
         num_channels,
         kernel_size=1,
         bias=False,
-        norm=get_norm(norm, num_channels),
+        #norm=get_norm(norm, num_channels),
         )
 
         conv2 = Conv2d(
@@ -59,7 +62,7 @@ def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor
         num_channels,
         kernel_size=1,
         bias=False,
-        norm=get_norm(norm, num_channels),
+        #norm=get_norm(norm, num_channels),
         )
         return (conv1, conv2, iter)
 
@@ -68,15 +71,18 @@ def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor
 
     # subpixelconv helper
     def sub_pixel_conv(x, r=2):
-        C, H, W = x.shape
+        C, H, W = x.shape[1:]
+        print ("shape: ",x.shape, C,H,W)
         # assert C == self.in_channels
-        output = np.zeros(int(C/r**2), r*H, r*W)
+        output = torch.zeros((x.shape[0], int(C/r**2), r*H, r*W))
 
-        for c in range(int(C/r**2)):
-            for i in range(H):
-                for j in range(W):
-                    values = x[c*r*r:(c+1)*r*r][i][j]
-                    output[c][i:i + r][j:j + r] = np.reshape(values, (r,r))
+        for bs in range(x.shape[0]):
+            for c in range(int(C/r**2)):
+                for i in range(H):
+                    for j in range(W):
+                        values = x[bs][c*r*r:(c+1)*r*r][i][j]
+                        print("value shape: ",values.shape)
+                        output[bs][c][i:i + r][j:j + r] = torch.reshape(values, (r,r))
         return output
 
 
@@ -131,14 +137,14 @@ def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor
     # of the other)
     top = p2
     print("\np2 shape: ",top.shape,"\n")
-    top = np.concatenate((bottom, top), axis=0)
+    top = torch.cat((bottom, top), axis=0)
     print("\np2 shape: ",top.shape,"\n")
     top = extractor_helper(texture_extractor, top)
     print("\np2 shape: ",top.shape,"\n")
 
     # Since top has double the original # of channels, we "cast" bottom
     # to the same shape, then add to get p3'
-    bottom = np.concatenate((bottom, bottom), axis=0)
+    bottom = torch.cat((bottom, bottom), axis=0)
     result = bottom + top
     print("\nresult shape: ",result.shape,"\n")
 
