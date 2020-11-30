@@ -85,7 +85,7 @@ def FTT_get_p3pr(p2, p3, out_channels, norm):
     bottom = extractor_helper(content_extractor, bottom)
     sub_pixel_conv = nn.PixelShuffle(2)
     bottom = sub_pixel_conv(bottom)
-    print("\np3 shape: ",bottom.shape,"\n")
+    #print("\np3 shape: ",bottom.shape,"\n")
 
     # We interpreted "wrap" as concatenating bottom and top
     # so the total channels is doubled after (basically place one on top
@@ -93,11 +93,12 @@ def FTT_get_p3pr(p2, p3, out_channels, norm):
     top = p2
     top = torch.cat((bottom, top), axis=1)
     top = extractor_helper(texture_extractor, top)
+    top = top[:,256:]
     print("\np2 shape: ",top.shape,"\n")
 
     # Since top has double the original # of channels, we "cast" bottom
     # to the same shape, then add to get p3'
-    bottom = torch.cat((bottom, bottom), axis=1)
+    #bottom = torch.cat((bottom, bottom), axis=1)
     result = bottom + top
     print("\nftt final result shape: ",result.shape,"\n")
 

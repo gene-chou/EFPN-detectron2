@@ -2,6 +2,7 @@
 import math
 import fvcore.nn.weight_init as weight_init
 import torch.nn.functional as F
+import torch 
 from torch import nn
 
 from detectron2.layers import Conv2d, ShapeSpec, get_norm
@@ -232,9 +233,14 @@ class FPN(Backbone):
             results.extend(self.top_block(top_block_in_feature))
         assert len(self._out_features) == len(results)
         ret = dict(zip(self._out_features, results))
-        # ret['p3\''] = self.ftt.forward(ret)
 
-        p2_p = FTT_get_p3pr(ret['p3'], ret['p4'], 256, "")#, self.channel_scaler, self.content_extractor, self.texture_extractor)
+        p3_p = FTT_get_p3pr(ret['p3'], ret['p4'], 256, "")#, self.channel_scaler, self.content_extractor, self.texture_extractor)
+        # p2_p is p3_p upsampled by 2
+        p3_p = F.interpolate(p3_p, scale_factor=2, mode="nearest")
+        # the final lateral_features at the end of the loop is c2_p
+        c2_p = lateral_features
+        p2_p = p3_p + c2_p 
+
         ret['p2'] = p2_p       
 
         return ret
