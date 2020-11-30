@@ -183,12 +183,6 @@ class FPN(Backbone):
     # sub_pixel_conv = SubPixelConv(p2[1] * 4, 2)
 
 
-
-
-
-
-
-
     @property
     def size_divisibility(self):
         return self._size_divisibility
@@ -240,8 +234,8 @@ class FPN(Backbone):
         ret = dict(zip(self._out_features, results))
         # ret['p3\''] = self.ftt.forward(ret)
 
-        ret['p3\''] = FTT_get_p3pr(ret['p2'], ret['p3'], self.channel_scaler, self.content_extractor, self.texture_extractor)
-        
+        p3_p = FTT_get_p3pr(ret['p3'], ret['p4'])#, self.channel_scaler, self.content_extractor, self.texture_extractor)
+        ret['p2'] = p3_p       
 
         return ret
 

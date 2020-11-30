@@ -23,7 +23,7 @@ from .resnet import build_resnet_backbone
 
 # p2, p3 in the paper is p3, p4 for us 
 # format of p2, p3 is both [bs, channels, height, width]
-def FTT_get_p3pr(p2, p3, channel_scaler, content_extractor, texture_extractor): 
+def FTT_get_p3pr(p2, p3):#, channel_scaler, content_extractor, texture_extractor): 
 
     # channel_scaler = Conv2d(
     #     p3[1],
@@ -36,7 +36,35 @@ def FTT_get_p3pr(p2, p3, channel_scaler, content_extractor, texture_extractor):
     # content_extractor = Extractor(p2[1] * 4, 3, norm)
     # texture_extractor = Extractor(p2[1] * 2, 3, norm)
     # sub_pixel_conv = SubPixelConv(p2[1] * 4, 2)
+    channel_scaler = Conv2d(
+        out_channels,
+        out_channels * 4,
+        kernel_size=1,
+        bias=False,
+        norm=''
+    )
 
+    # tuple of (conv2d, conv2d, iter)
+    def create_convs(num_channels, iter=3):
+        conv1 = Conv2d(
+        num_channels,
+        num_channels,
+        kernel_size=1,
+        bias=False,
+        norm=get_norm(norm, num_channels),
+        )
+
+        conv2 = Conv2d(
+        num_channels,
+        num_channels,
+        kernel_size=1,
+        bias=False,
+        norm=get_norm(norm, num_channels),
+        )
+        return (conv1, conv2, iter)
+
+    content_extractor = create_convs(out_channels * 4)
+    texture_extractor = create_convs(out_channels * 2)
 
     # subpixelconv helper
     def sub_pixel_conv(x, r=2):
@@ -65,24 +93,54 @@ def FTT_get_p3pr(p2, p3, channel_scaler, content_extractor, texture_extractor):
         return out
 
 
-    result = []
-    for i in range(p3.shape[0]):
-        bottom = p3[i]
-        bottom = channel_scaler(bottom)
-        bottom = extractor_helper(content_extractor, bottom)
-        bottom = sub_pixel_conv(bottom)
+    #result = []
 
-        # We interpreted "wrap" as concatenating bottom and top
-        # so the total channels is doubled after (basically place one on top
-        # of the other)
-        top = p2[i]
-        top = np.concatenate((bottom, top), axis=0)
-        top = extractor_helper(texture_extractor, top)
+    # for i in range(p3.shape[0]):
+    #     bottom = p3[i]
+    #     print(bottom.shape)
+    #     bottom = channel_scaler(bottom)
+    #     print("---\n")
+    #     print(bottom.shape)
+    #     bottom = extractor_helper(content_extractor, bottom)
+    #     bottom = sub_pixel_conv(bottom)
 
-        # Since top has double the original # of channels, we "cast" bottom
-        # to the same shape, then add to get p3'
-        bottom = np.concatenate((bottom, bottom), axis=0)
-        result.append(bottom + top)
+    #     # We interpreted "wrap" as concatenating bottom and top
+    #     # so the total channels is doubled after (basically place one on top
+    #     # of the other)
+    #     top = p2[i]
+    #     top = np.concatenate((bottom, top), axis=0)
+    #     top = extractor_helper(texture_extractor, top)
+
+    #     # Since top has double the original # of channels, we "cast" bottom
+    #     # to the same shape, then add to get p3'
+    #     bottom = np.concatenate((bottom, bottom), axis=0)
+    #     result.append(bottom + top)
+
+
+    bottom = p3
+    print("\np3 shape: ",bottom.shape,"\n")
+    bottom = channel_scaler(bottom)
+    print("\np3 shape: ",bottom.shape,"\n")
+    bottom = extractor_helper(content_extractor, bottom)
+    print("\np3 shape: ",bottom.shape,"\n")
+    bottom = sub_pixel_conv(bottom)
+    print("\np3 shape: ",bottom.shape,"\n")
+
+    # We interpreted "wrap" as concatenating bottom and top
+    # so the total channels is doubled after (basically place one on top
+    # of the other)
+    top = p2
+    print("\np2 shape: ",top.shape,"\n")
+    top = np.concatenate((bottom, top), axis=0)
+    print("\np2 shape: ",top.shape,"\n")
+    top = extractor_helper(texture_extractor, top)
+    print("\np2 shape: ",top.shape,"\n")
+
+    # Since top has double the original # of channels, we "cast" bottom
+    # to the same shape, then add to get p3'
+    bottom = np.concatenate((bottom, bottom), axis=0)
+    result = bottom + top
+    print("\nresult shape: ",result.shape,"\n")
 
     return result
 
