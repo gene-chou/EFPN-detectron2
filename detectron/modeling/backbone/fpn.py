@@ -100,6 +100,8 @@ class FPN(Backbone):
         
         # Place convs into top-down order (from low to high resolution)
         # to make the top-down computation in forward clearer.
+        self.out_channels = out_channels
+        self.norm = norm
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
         self.top_block = top_block
@@ -125,26 +127,6 @@ class FPN(Backbone):
         self._fuse_type = fuse_type
 
 
-
-
-        # ftt init
-
-
-        # assert isinstance(fpn, FPN)
-        # assert in_features == ['p2', 'p3']
-        # input_shapes = fpn.output_shape()
-        # assert input_shapes['p3'].channels == input_shapes['p2'].channels
-        # in_channels_per_feature = [input_shapes[f].channels for f in in_features]
-
-        # Apply before content extractor to scale up channels from C to 4C
-        self.channel_scaler = Conv2d(
-            out_channels,
-            out_channels * 4,
-            kernel_size=1,
-            bias=False,
-            norm=''
-        )
-
         # tuple of (conv2d, conv2d, iter)
         def create_convs(num_channels, iter=3):
             conv1 = Conv2d(
@@ -164,25 +146,6 @@ class FPN(Backbone):
             )
             return (conv1, conv2, iter)
     
-        self.content_extractor = create_convs(out_channels * 4)
-        self.texture_extractor = create_convs(out_channels * 2)
-        # self.content_extractor = Extractor(input_shapes['p2'].channels * 4, 3, norm)
-        # self.texture_extractor = Extractor(input_shapes['p2'].channels * 2, 3, norm)
-        # self.sub_pixel_conv = SubPixelConv(input_shapes['p2'].channels * 4, 2)
-
-
-            # channel_scaler = Conv2d(
-    #     p3[1],
-    #     p2[1] * 4,
-    #     kernel_size=1,
-    #     bias=False,
-    #     norm=''
-    # )
-
-    # content_extractor = Extractor(p2[1] * 4, 3, norm)
-    # texture_extractor = Extractor(p2[1] * 2, 3, norm)
-    # sub_pixel_conv = SubPixelConv(p2[1] * 4, 2)
-
 
     @property
     def size_divisibility(self):
@@ -234,7 +197,7 @@ class FPN(Backbone):
         assert len(self._out_features) == len(results)
         ret = dict(zip(self._out_features, results))
 
-        p3_p = FTT_get_p3pr(ret['p3'], ret['p4'], 256, "")#, self.channel_scaler, self.content_extractor, self.texture_extractor)
+        p3_p = FTT_get_p3pr(ret['p3'], ret['p4'], self.out_channels, self.norm)
         # p2_p is p3_p upsampled by 2
         p3_p = F.interpolate(p3_p, scale_factor=2, mode="nearest")
         # the final lateral_features at the end of the loop is c2_p
