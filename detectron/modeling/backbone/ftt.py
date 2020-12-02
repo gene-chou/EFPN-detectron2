@@ -31,7 +31,7 @@ def FTT_get_p3pr(p2, p3, out_channels, norm):
     )
 
     # tuple of (conv2d, conv2d, iter)
-    def create_convs(num_channels, iter=3):
+    def create_content_extractor(x, num_channels, iterations=3):
         conv1 = Conv2d(
         num_channels,
         num_channels,
@@ -47,30 +47,54 @@ def FTT_get_p3pr(p2, p3, out_channels, norm):
         bias=False,
         #norm=get_norm(norm, num_channels),
         )
-        return (conv1, conv2, iter)
-
-    content_extractor = create_convs(out_channels * 4)
-    texture_extractor = create_convs(out_channels * 2)
-
-    def extractor_helper(extractor, x): # extractor is tuple of (conv2D, cov2D, int)
-        def each_iter(x):
-            out = extractor[0](x)
-            out = F.relu_(out)
-            out = extractor[1](out)
-            return out
 
         out = x
-        for i in range(extractor[2]):
-            out = each_iter(out)
+        for i in range(iterations):
+            out = conv1(out)
+            out = F.relu_(out)
+            out = conv2(out)
+            out = F.relu_(out)
+
         return out
 
-    # Image Super-Resolution by Neural Texture Transfer (Zhang 2019)
-    # we need to half the number of channels as well so it's maintained at 256
-    def texture_extractor():
+    def create_texture_extractor(x, num_channels, iterations=3):
+        conv1 = Conv2d(
+        num_channels,
+        num_channels,
+        kernel_size=1,
+        bias=False,
+        #norm=get_norm(norm, num_channels),
+        )
+
+        conv2 = Conv2d(
+        num_channels,
+        num_channels,
+        kernel_size=1,
+        bias=False,
+        #norm=get_norm(norm, num_channels),
+        )
+
+        conv3 = Conv2d(
+        num_channels,
+        int(num_channels/2),
+        kernel_size=1,
+        bias=False,
+        )
+
+        out = x
+        for i in range(iterations):
+            out = conv1(out)
+            out = F.relu_(out)
+            out = conv2(out)
+            out = F.relu_(out)
+        out = conv3(out)
+        out = F.relu_(out)
+        return out
+
 
     bottom = p3
     bottom = channel_scaler(bottom)
-    bottom = extractor_helper(content_extractor, bottom)
+    bottom = create_content_extractor(bottom, out_channels*4)
     sub_pixel_conv = nn.PixelShuffle(2)
     bottom = sub_pixel_conv(bottom)
     #print("\np3 shape: ",bottom.shape,"\n")
@@ -80,12 +104,9 @@ def FTT_get_p3pr(p2, p3, out_channels, norm):
     # of the other)
     top = p2
     top = torch.cat((bottom, top), axis=1)
-    top = extractor_helper(texture_extractor, top)
-    top = top[:,256:]
+    top = create_texture_extractor(top, out_channels*2)
+    #top = top[:,256:]
 
-    # Since top has double the original # of channels, we "cast" bottom
-    # to the same shape, then add to get p3'
-    #bottom = torch.cat((bottom, bottom), axis=1)
     result = bottom + top
 
     return result
