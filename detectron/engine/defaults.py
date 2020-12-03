@@ -31,7 +31,7 @@ from detectron2.evaluation import (
     print_csv_format,
     verify_results,
 )
-from detectron2.modeling import build_model
+from detectron.modeling import build_model
 from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils import comm
 from detectron2.utils.collect_env import collect_env_info
@@ -322,7 +322,9 @@ class DefaultTrainer(TrainerBase):
         Args:
             resume (bool): whether to do resume or not
         """
+        #print('\ntest1\n')
         checkpoint = self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume)
+        #print('\ntest2\n')
         if resume and self.checkpointer.has_checkpoint():
             self.start_iter = checkpoint.get("iteration", -1) + 1
             # The checkpoint stores the training iteration that just finished, thus we start
