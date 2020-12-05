@@ -21,9 +21,9 @@ cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_X_1
 cfg.MODEL.RESNETS.NUM_GROUPS = 32 # 1 ==> ResNet; > 1 ==> ResNeXt
 cfg.MODEL.RESNETS.WIDTH_PER_GROUP = 8
 cfg.MODEL.RESNETS.DEPTH = 101
-cfg.MODEL.BACKBONE.FREEZE_AT = 0
+cfg.MODEL.BACKBONE.FREEZE_AT = 1
 cfg.MODEL.BACKBONE.NAME = "build_resnet_fpn_backbone"
-cfg.MODEL.DEVICE = 'cpu' 
+cfg.MODEL.DEVICE = 'cuda' 
 
 #dataset default is coco 
 #cfg.DATASETS.TRAIN = ("",)
@@ -33,11 +33,11 @@ cfg.MODEL.FPN.IN_FEATURES = ["res2", "res3", "res4", "res5", "res6"]
 
 cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE = 128
 cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 256
-cfg.SOLVER.IMS_PER_BATCH = 2
+cfg.SOLVER.IMS_PER_BATCH = 16
 
 cfg.SOLVER.BASE_LR = 0.001
-cfg.SOLVER.MAX_ITER = 5000 
-cfg.SOLVER.STEPS = (1000, ) # The iteration number to decrease learning rate by GAMMA (0.1)
+cfg.SOLVER.MAX_ITER = 40000
+cfg.SOLVER.STEPS = (8000, ) # The iteration number to decrease learning rate by GAMMA (0.1)
 
 
 trainer = DefaultTrainer(cfg)
