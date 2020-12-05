@@ -1,0 +1,5 @@
+emacs 
+libgl1-mesa-glx
+python3-pip
+nvidia-cuda-toolkit
+nvidia-utils-455
