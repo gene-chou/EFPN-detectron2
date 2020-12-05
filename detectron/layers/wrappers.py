@@ -56,8 +56,6 @@ class Conv2d(torch.nn.Conv2d):
         activation = kwargs.pop("activation", None)
         super().__init__(*args, **kwargs)
 
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
         self.norm = norm
         self.activation = activation
 
@@ -75,6 +73,7 @@ class Conv2d(torch.nn.Conv2d):
                     self.norm, torch.nn.SyncBatchNorm
                 ), "SyncBatchNorm does not support empty inputs!"
 
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         x = F.conv2d(
             x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups
         ).to(device)
