@@ -76,7 +76,7 @@ class Conv2d(torch.nn.Conv2d):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         x = x.to(device)
         x = F.conv2d(
-            x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups
+            x, self.weight.to(device), self.bias, self.stride, self.padding, self.dilation, self.groups
         ).to(device)
         if self.norm is not None:
             x = self.norm(x)
