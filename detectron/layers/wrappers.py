@@ -74,6 +74,7 @@ class Conv2d(torch.nn.Conv2d):
                 ), "SyncBatchNorm does not support empty inputs!"
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        x = x.to(device)
         x = F.conv2d(
             x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups
         ).to(device)
