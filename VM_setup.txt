@@ -1,0 +1,43 @@
+setting up google cloud VM, ubuntu 20.10
+
+git clone https://github.com/gene-chou/EFPN-detectron2.git
+sudo apt update 
+
+sudo apt install the apt_packages 
+sudo apt install emacs libgl1-mesa-glx python3-pip nvidia-cuda-toolkit nvidia-utils-455
+
+sudo pip install the pip packages
+sudo pip3 install opencv-python torch torchvision kornia
+
+python3 -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+
+sudo apt install linux-headers-$(uname -r)
+
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
+
+sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
+
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub
+
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+
+sudo apt update
+
+sudo apt -y install cuda
+
+echo 'export PATH=/usr/local/cuda-10.0/bin${PATH:+:${PATH}}' >> $HOME/.bashrc
+
+bash
+
+-> if get error “dpkg-divert: error: mismatch on package"
+LC_MESSAGES=C dpkg-divert --list '*nvidia-340*' | sed -nre 's/^diversion of (.*) to .*/\1/p' | xargs -rd'\n' -n1 -- sudo dpkg-divert --remove
+
+
+————————
+
+transferring files from local dir to VM 
+
+install sdk 
+in installed directory, run ./google-cloud-sdk/bin/gcloud init
+export PATH="$HOME/google-cloud-sdk/bin:$PATH"
+gcloud compute scp --recurse “local directory“ root@VM_name:/home/ 
