@@ -2,7 +2,7 @@
 
 #### To train:
 
-run training scripts such as frcnn_x101_efpn.py as included here
+run training scripts such as frcnn_x101_efpn.py as included here, change configs accordingly
 
 
 #### Modifications from detectron2:
