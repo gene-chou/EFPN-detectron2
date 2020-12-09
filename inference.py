@@ -18,7 +18,7 @@ cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_
 #Use the final weights generated after successful training for inference  
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set the testing threshold for this model
 
-cfg.DATASETS.TEST = ("coco_2017_val")#datasets/coco/val2017")
+cfg.DATASETS.TEST = ("coco_2017_test")#datasets/coco/val2017")
 
 cfg.MODEL.RESNETS.NUM_GROUPS = 32 # 1 ==> ResNet; > 1 ==> ResNeXt
 cfg.MODEL.RESNETS.WIDTH_PER_GROUP = 8
@@ -36,7 +36,11 @@ cfg.SOLVER.IMS_PER_BATCH = 1
 cfg.SOLVER.BASE_LR = 0.0001
 cfg.SOLVER.MAX_ITER = 5000
 
+cfg.INPUT.MIN_SIZE_TRAIN = (400,)
+cfg.INPUT.MAX_SIZE_TRAIN = 667
+
 cfg.MODEL.WEIGHTS = "output/model_final.pth"
+#cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
 
 #model = build_model(cfg)
 #DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
@@ -46,8 +50,8 @@ predictor = DefaultPredictor(cfg)
 
 #Call the COCO Evaluator function and pass the Validation Dataset
 # evaluator = COCOEvaluator("boardetect_val", cfg, False, output_dir="/output/")
-evaluator = COCOEvaluator("coco_2017_val", cfg, False, output_dir="inf_output/")
-val_loader = build_detection_test_loader(cfg, "coco_2017_val")
+evaluator = COCOEvaluator("coco_2017_test", cfg, False, output_dir="inf_output/")
+val_loader = build_detection_test_loader(cfg, "coco_2017_test", num_workers=4)
 
 #Use the created predicted model in the previous step
 print(inference_on_dataset(predictor.model, val_loader, evaluator))
