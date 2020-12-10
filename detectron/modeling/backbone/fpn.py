@@ -199,6 +199,7 @@ class FPN(Backbone):
 
         p3_p = FTT_get_p3pr(ret['p3'], ret['p4'], self.out_channels, self.norm)
         # p2_p is p3_p upsampled by 2
+        p3_p_temp = p3_p
         p3_p = F.interpolate(p3_p, scale_factor=2, mode="nearest")
         # the final lateral_features at the end of the loop is c2_p
         c2_p = lateral_features
@@ -206,6 +207,26 @@ class FPN(Backbone):
 
         ret['p2'] = p2_p       
 
+        # Save files
+        import cv2
+        import numpy as np
+        p2 = ret['p3'].detach().numpy()
+        p3 = ret['p4'].detach().numpy()
+        p2_p = p2_p.detach().numpy()
+        p3_p = p3_p_temp.detach().numpy()
+
+        def save_image(arr, name):
+            for i in range(len(arr[0])):
+                im = arr[0][i]
+                im = np.flip(im, 3)
+                im = im / np.amax(im)
+                im *= 256
+                cv2.imwrite('visual/' + str(i) + '-' + name + '.jpg', im)
+
+        save_image(p2, 'p2')
+        save_image(p3, 'p3')
+        save_image(p2_p, 'p2_p')
+        save_image(p3_p, 'p3_p')
         return ret
 
     def output_shape(self):

@@ -225,6 +225,15 @@ class SimpleTrainer(TrainerBase):
         """
         If you want to do something with the losses, you can wrap the model.
         """
+        # Copy original image and save the imagename
+        import shutil
+        filename = data['file_name']
+        f = open('imagename', 'w')
+        f.write(filename)
+        f.close()
+
+        shutil.copyfile(filename, 'visual/orig.jpg')
+
         loss_dict = self.model(data)
         losses = sum(loss_dict.values())
 
