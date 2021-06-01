@@ -25,12 +25,4 @@ EFPN original paper: C. Deng, M. Wang, L. Liu, and Y. Liu.  Extended feature pyr
 (https://arxiv.org/pdf/2003.07021v1.pdf)
 
 
-```BibTeX
-@misc{wu2019detectron2,
-  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
-                  Wan-Yen Lo and Ross Girshick},
-  title =        {Detectron2},
-  howpublished = {\url{https://github.com/facebookresearch/detectron2}},
-  year =         {2019}
-}
-```
+Detectron2: Yuxin Wu, Alexander Kirillov, Francisco Massa and Wan-Yen Lo, & Ross Girshick. (2019). Detectron2. https://github.com/facebookresearch/detectron2.
